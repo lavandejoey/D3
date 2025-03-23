@@ -34,8 +34,8 @@ We design an experiment to show the diversed performance of different methods wh
 | DIRE         | 97.6%       | 68.4%        | 80.1%          | ICCV23      |
 | UFD          | 86.6%       | 81.4%        | 83.5%          | CVPR23      |
 | UCF          | 91.7%       | 75.0%        | 81.7%          | ICCV23      |
-| NPR          | 98.6%       | 78.7%        | 86.6%          | CVPR24      |
-| ​D³ (Ours)   | ​**96.6%​**   | ​**86.7%​**    | ​**90.7%​**      | CVPR25      |
+| NPR          | **98.6%**       | 78.7%        | 86.6%          | CVPR24      |
+| ​D³ (Ours)   | ​96.6%​   | ​**86.7%​**    | ​**90.7%​**      | CVPR25      |
 
 
 ## Detection Robustness
