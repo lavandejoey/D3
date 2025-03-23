@@ -11,7 +11,10 @@ Official implementation of "​D³: Scaling Up Deepfake Detection by Learning fr
 
 ## Abstract
 
+<div style="text-align: justify;">
 The boom of Generative AI brings opportunities entangled with risks and concerns. Existing literature emphasizes the generalization capability of deepfake detection on unseen generators, significantly promoting the detector's ability to identify more universal artifacts. This work seeks a step toward a universal deepfake detection system with better generalization and robustness. We do so by first scaling up the existing detection task setup from the one-generator to multiple-generators in training, during which we disclose two challenges presented in prior methodological designs and demonstrate the divergence of detectors' performance. Specifically, we reveal that the current methods tailored for training on one specific generator either struggle to learn comprehensive artifacts from multiple generators or sacrifice their fitting ability for seen generators (i.e., *In-Domain* (ID) performance) to exchange the generalization for unseen generators (i.e., *Out-Of-Domain* (OOD) performance). Therefore, detectors' performance gradually diverges during the scaling up of generators. To tackle the above challenges, we propose our ​**Discrepancy Deepfake Detector (D³)** framework, whose core idea is to deconstruct the universal artifacts from multiple generators by introducing a parallel network branch that takes a distorted image feature as an extra discrepancy signal and supplement its original counterpart. Extensive scaled-up experiments demonstrate the effectiveness of ​**D³**, achieving a 5.3% accuracy improvement in the OOD testing compared to the current SOTA methods while maintaining the ID performance.
+</div>
+
 
 ## Scaling-up Process
 
