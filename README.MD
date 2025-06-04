@@ -6,7 +6,7 @@
 Official implementation of "​D³: Scaling Up Deepfake Detection by Learning from Discrepancy" (CVPR 2025). This work reveals two challenges when scaling up generators in the training set and proposes a dual-branch framework to improve generalization in multi-generator deepfake detection by leveraging discrepancy signals from distorted images.
 
 <div style="text-align:center;">
-  <img src="framework.png" alt="D³ Framework" style="width:90%;">
+  <img src="Figs/framework.png" alt="D³ Framework" style="width:90%;">
 </div>
 
 ## Abstract
@@ -21,7 +21,7 @@ The boom of Generative AI brings opportunities entangled with risks and concerns
 We design an experiment to show the diversed performance of different methods when gradually adding generators into the training pool. 
 
 <div style="text-align:center;">
-  <img src="scale-up-generators.png" alt="scaling-up process" style="width:90%;">
+  <img src="Figs/scale-up-generators.png" alt="scaling-up process" style="width:90%;">
 </div>
 
 
@@ -43,14 +43,43 @@ We design an experiment to show the diversed performance of different methods wh
 Our method demonstrates excellent robustness. Here are experiments on Gaussian blurring ranging from 0 to 2 and JPEG compression ranging from 30 to 100 to verify the robustness of different methods.
 
 <div style="text-align:center;">
-  <img src="Robustness.png" alt="detection robustness" style="width:90%;">
+  <img src="Figs/Robustness.png" alt="detection robustness" style="width:90%;">
 </div>
 
-## To-Do List
+## Train and Inference
 
-- [ ] Release Inference Code and Model Weights  
-- [ ] Release Training Code  
-- [ ] Release Combined Datasets
+📦 1. Environment Setup
+
+```bash
+cd D3 
+conda env create -f environment.yml -n D3 
+conda activate D3 
+```
+🚀 2. Training Instructions
+
+Before training, replace the folder path under the `TODO` placeholders in `train.py` with your dataset folder path.
+
+Execution:
+```bash
+python train.py --name=train_d3 --arch=CLIP:ViT-L/14 --checkpoints_dir=path/to/save/checkpoints --fix_backbone --head_type=attention --batch_size=256 --shuffle --patch_size=14
+```
+🔮 3. Inference Instructions
+
+Our pretrained weight is in folder ckpt/classifier.pth.
+
+Before inferencing, replace the folder path under the `TODO` placeholders in `validate_for_robustness.py` with your dataset folder path
+
+Execution:
+```bash
+python validate_for_robustness.py
+```
+
+📂 4. Combined Dataset
+
+Our composite dataset merges resources from:
+[UFD](https://github.com/WisconsinAIVision/UniversalFakeDetect/tree/main)
+and
+[GenImage](https://github.com/GenImage-Dataset/GenImage).
 
 ## Citation
 If you find our work helpful in your research, please cite it using the following:
@@ -62,3 +91,8 @@ If you find our work helpful in your research, please cite it using the followin
   year={2025}
 }
 ```
+
+
+
+
+
