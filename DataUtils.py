@@ -16,21 +16,29 @@ After that, the files are organized as:
 """
 from __future__ import annotations
 
+import cv2
+import numpy as np
 import os
+import pandas as pd
+from PIL import Image, ImageFile
 from dataclasses import dataclass, asdict
 from enum import Enum
 from pathlib import Path
-from tqdm import tqdm
-from typing import List, Mapping, Optional, Sequence, Tuple, Union
-
-import numpy as np
-import pandas as pd
 from sklearn.metrics import accuracy_score, roc_auc_score, roc_curve
+from sympy.printing.pytorch import torch
+from torch.utils.data import Dataset
+from tqdm import tqdm
+from typing import Mapping, Sequence, Tuple
+from typing import Optional, Union, Dict, Any, List
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # VIDEOS_DIR = Path("/home/zliu/FakeParts2/datasets/FakeParts_V2")
 # FRAMES_ROOT = Path("/home/zliu/FakeParts2/datasets/FakeParts_V2_Frame")
 VIDEOS_DIR = Path("/projects/hi-paris/DeepFakeDataset/FakeParts_data_addition_videos_only")
 FRAMES_ROOT = Path("/projects/hi-paris/DeepFakeDataset/FakeParts_data_addition_frames_only")
+VIDEOS_CSV = Path("/projects/hi-paris/DeepFakeDataset/videos_index.csv")
+FRAMES_CSV = Path("/projects/hi-paris/DeepFakeDataset/frames_index.csv")
 VID_EXTS: Tuple[str, ...] = (".mp4", ".avi", ".mkv", ".mov")
 IMG_EXTS: Tuple[str, ...] = (".jpg", ".jpeg", ".png", ".bmp", ".tiff")
 EXCLUDE = ["Annotations"]  # keywords for folder / file to be excluded during indexing
@@ -43,18 +51,144 @@ class Subset(str, Enum):
     REAL_FRAMES = "real_frames"
 
 
-@dataclass
+@dataclass(frozen=True)
 class IndexEntry:
     root: Path  # Root path
     rel_path: Path  # Path to file
     task: str  # task name, metadata
     method: str  # method name, metadata
     subset: Subset  # help defining the label
+    name: str  # video name
     label: int  # 0=real, 1=fake for gt value
     mode: str  # 'video' or 'frame' data file type
 
     def __getitem__(self, item: str) -> object:
         return getattr(self, item)
+
+
+ENTRY_COL = ["rel_path", "task", "method", "subset", "name", "label", "mode"]
+
+
+def collate_skip_none(batch: List[Optional[Tuple[torch.Tensor, int, Dict[str, Any]]]]):
+    """Filter out None samples produced by the dataset (e.g., corrupt files)."""
+    batch = [b for b in batch if b is not None]
+    if not batch:
+        return None  # signal to skip this batch
+    imgs, labels, metas = zip(*batch)  # type: ignore[misc]
+    imgs = torch.stack(imgs, dim=0)
+    labels = torch.as_tensor(labels, dtype=torch.long)
+    merged_meta = {k: [m[k] for m in metas] for k in metas[0].keys()}
+    return imgs, labels, merged_meta
+
+
+class FakePartsV2DatasetBase(Dataset):
+    def __init__(self,
+                 data_root: Union[str, Path] = FRAMES_ROOT,
+                 mode: str = "frame",  # "frame" or "video"
+                 csv_path: Optional[Union[str, Path]] = FRAMES_CSV,
+                 model_name: str = "unknown_model",
+                 transform=None,
+                 on_corrupt: str = "raise",  # "raise" | "warn" | "skip"
+                 ):
+        super().__init__()
+
+        if mode not in ("frame", "video"):
+            raise ValueError(f"mode must be 'frame' or 'video', got: {mode}")
+
+        self.model_name = model_name
+        self.data_root = Path(data_root)
+        self.mode = mode
+        self.exts = IMG_EXTS if mode == "frame" else VID_EXTS
+        self.transform = transform
+        self.on_corrupt = on_corrupt
+
+        # Build/ingest index once
+        df = index_dataframe(self.data_root, file_exts=self.exts, csv_path=csv_path)
+
+        # Keep only required cols & filter by mode once
+        df = df[ENTRY_COL]
+        df = df[df["mode"] == mode]
+        if df.empty:
+            raise ValueError(f"No data found for mode={mode} under {data_root} with extensions {self.exts}.")
+
+        # Precompute lightweight arrays/lists to avoid df.iloc in __getitem__
+        self._rel_paths: List[str] = df["rel_path"].tolist()
+        self._abs_paths: List[Path] = [self.data_root / p for p in self._rel_paths]
+        # int32/64 for labels to be collate-friendly
+        self._labels: np.ndarray = df["label"].to_numpy(dtype=np.int64, copy=False)
+        self._tasks: List[str] = df["task"].tolist()
+        self._methods: List[str] = df["method"].tolist()
+        self._subsets: List[str] = df["subset"].tolist()
+        self._modes: List[str] = df["mode"].tolist()
+
+        # (Optional) free pandas memory early
+        del df
+
+    def __len__(self) -> int:
+        return len(self._rel_paths)
+
+    def _make_meta(self, idx: int, label: int) -> Dict[str, Any]:
+        # minimal metadata needed to populate REQUIRED_COLS
+        #     "sample_id",  # unique id per row (string or int) you use to join with index
+        #     "task",  # from dataset
+        #     "method",  # from dataset
+        #     "subset",  # real_videos/fake_videos/... from dataset
+        #     "label",  # 0=real, 1=fake  (ground truth)
+        #     "model",  # model name or identifier
+        #     "mode",  # 'video' or 'frame'
+        #     "score",  # real-valued score, higher => more likely fake, -1 indicating unavailable
+        #     "pred",  # hard prediction in {0,1} produced by the model
+        return {
+            "sample_id": self._rel_paths[idx],
+            "task": self._tasks[idx],
+            "method": self._methods[idx],
+            "subset": self._subsets[idx],
+            "label": label,  # 0=real, 1=fake
+            "model": self.model_name,
+            "mode": self._modes[idx],  # 'frame' or 'video'
+            "score": None,
+            "pred": None,
+        }
+
+    def __getitem__(self, idx: int):
+        # Support negative indices like Python sequences
+        if idx < 0:
+            idx += len(self)
+        abs_path = self._abs_paths[idx]
+        label = int(self._labels[idx])
+
+        if self.mode == "frame":
+            try:
+                # Ensure file handle is closed even if transform reads lazily
+                with Image.open(abs_path) as im:
+                    im = im.convert("RGB")
+                    im.load()  # materialise, so file can close before transform
+                image = self.transform(im) if self.transform is not None else im
+                meta = self._make_meta(idx, label)
+                return image, label, meta
+            except Exception as e:
+                if self.on_corrupt == "raise":
+                    raise
+                elif self.on_corrupt == "warn":
+                    print(f"[warn] Failed to load image: {abs_path} ({e})")
+                # "skip" and "warn" both try to return a sentinel; DataLoader can filter None in custom collate_fn
+                return None
+        else:  # video
+            # Keep behaviour: return a handle (consider decoding to tensors with PyAV/decord for batching)
+            cap = cv2.VideoCapture(str(abs_path))
+            if not cap.isOpened():
+                if self.on_corrupt == "raise":
+                    raise RuntimeError(f"Failed to open video: {abs_path}")
+                elif self.on_corrupt == "warn":
+                    print(f"[warn] Failed to open video: {abs_path}")
+                return None
+            meta = self._make_meta(idx, label)
+            return cap, label, meta
+
+    def __repr__(self) -> str:
+        n = len(self)
+        return (f"{self.__class__.__name__}(n={n}, mode='{self.mode}', "
+                f"root='{self.data_root}', model='{self.model_name}')")
 
 
 def data_parse(file_path: Path, root: Path) -> IndexEntry:
@@ -147,11 +281,27 @@ def index_list(root_path: Path, file_exts: Tuple[str, ...]) -> List[IndexEntry]:
 
 
 def index_dataframe(root_path: Path,
-                    file_exts: Tuple[str, ...] = IMG_EXTS, ) -> pd.DataFrame:
+                    file_exts: Tuple[str, ...] = IMG_EXTS,
+                    csv_path: str | Path = FRAMES_CSV,
+                    ) -> pd.DataFrame:
     """
     Build a DataFrame with one row per media file (video or frame).
     Columns: ['task','method','subset','label','mode','rel_path','abs_path','root']
     """
+    # Check csv first, if provided -> load and return
+    if csv_path is not None and os.path.exists(csv_path):
+        read_kwargs = dict(usecols=ENTRY_COL, memory_map=True)
+        try:
+            # dtype_backend="pyarrow" keeps columns as Arrow types (less memory, faster ops)
+            df = pd.read_csv(csv_path, engine="pyarrow", dtype_backend="pyarrow", **read_kwargs)
+        except Exception:
+            df = pd.read_csv(csv_path, **read_kwargs)
+
+        # Vectorised path build (no lambda per row)
+        root_str = os.fspath(Path(root_path))
+        df["abs_path"] = root_str + os.sep + df["rel_path"].astype(str)
+        return df
+
     root_path = Path(root_path)
     all_entries: List[IndexEntry] = []
     all_entries.extend(index_list(root_path, file_exts=file_exts))
@@ -222,6 +372,25 @@ def standardise_predictions(
 
 
 # ========================= Metrics (overall & grouped) =========================
+
+def find_best_threshold(y_true: Sequence[int], y_pred: Sequence[float]) -> float:
+    """
+    Robust threshold search:
+    - No assumption on ordering or class balance.
+    - If only one class is present, return 0.5 as a safe default.
+    """
+    y_true = np.asarray(y_true).astype(int)
+    y_pred = np.asarray(y_pred).astype(float)
+
+    # single-class set: no meaningful ROC; return neutral threshold
+    if len(np.unique(y_true)) < 2:
+        return 0.5
+
+    # Youden's J: argmax(tpr - fpr)
+    fpr, tpr, thr = roc_curve(y_true, y_pred)
+    j = tpr - fpr
+    return float(thr[int(np.argmax(j))])
+
 
 def _ensure_binary_labels(df: pd.DataFrame) -> None:
     uniq = set(pd.unique(df["label"]))

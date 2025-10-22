@@ -11,11 +11,22 @@ from functools import partial, reduce
 from operator import mul
 
 from timm.models.vision_transformer import VisionTransformer, _cfg
-from timm.models.layers.helpers import to_2tuple
-from timm.models.layers import PatchEmbed
+
+try:  # timm >= 0.9
+    from timm.layers import to_2tuple, trunc_normal_, DropPath, PatchEmbed
+except Exception:  # timm <= 0.8
+    try:
+        from timm.models.layers.helpers import to_2tuple
+    except Exception:
+        def to_2tuple(x):
+            return x if isinstance(x, tuple) else (x, x)
+    try:
+        from timm.models.layers import trunc_normal_, DropPath, PatchEmbed
+    except Exception:
+        from timm.models.vision_transformer import PatchEmbed
 
 __all__ = [
-    'vit_small', 
+    'vit_small',
     'vit_base',
     'vit_conv_small',
     'vit_conv_base',
@@ -58,7 +69,7 @@ class VisionTransformerMoCo(VisionTransformer):
         assert self.embed_dim % 4 == 0, 'Embed dimension must be divisible by 4 for 2D sin-cos position embedding'
         pos_dim = self.embed_dim // 4
         omega = torch.arange(pos_dim, dtype=torch.float32) / pos_dim
-        omega = 1. / (temperature**omega)
+        omega = 1. / (temperature ** omega)
         out_w = torch.einsum('m,d->md', [grid_w.flatten(), omega])
         out_h = torch.einsum('m,d->md', [grid_h.flatten(), omega])
         pos_emb = torch.cat([torch.sin(out_w), torch.cos(out_w), torch.sin(out_h), torch.cos(out_h)], dim=1)[None, :, :]
@@ -73,6 +84,7 @@ class ConvStem(nn.Module):
     """ 
     ConvStem, from Early Convolutions Help Transformers See Better, Tete et al. https://arxiv.org/abs/2106.14881
     """
+
     def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, norm_layer=None, flatten=True):
         super().__init__()
 
@@ -119,12 +131,14 @@ def vit_small(**kwargs):
     model.default_cfg = _cfg()
     return model
 
+
 def vit_base(**kwargs):
     model = VisionTransformerMoCo(
         patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()
     return model
+
 
 def vit_conv_small(**kwargs):
     # minus one ViT block
@@ -133,6 +147,7 @@ def vit_conv_small(**kwargs):
         norm_layer=partial(nn.LayerNorm, eps=1e-6), embed_layer=ConvStem, **kwargs)
     model.default_cfg = _cfg()
     return model
+
 
 def vit_conv_base(**kwargs):
     # minus one ViT block
