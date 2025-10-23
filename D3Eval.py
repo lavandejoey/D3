@@ -126,6 +126,7 @@ def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser("D3Eval: CLIP attention head evaluator (frames)")
     ap.add_argument("--data_root", required=True, type=str, help="Dataset root folder")
     ap.add_argument("--data_csv", type=str, default=None, help="Optional prebuilt index CSV")
+    ap.add_argument("--done_csv_list", nargs="*", default=[], type=str)
     ap.add_argument("--results", required=True, type=str, help="Folder to save predictions.csv")
     ap.add_argument("--ckpt", required=True, type=str, help="Attention head checkpoint (.pth)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -142,7 +143,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    out_dir = Path(args.results);
+    out_dir = Path(args.results)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_csv = out_dir / "predictions.csv"
 
@@ -163,6 +164,7 @@ def main() -> None:
         csv_path=args.data_csv,
         model_name=args.model_name,
         transform=transform,
+        done_csv_list=args.done_csv_list,
         on_corrupt="warn",  # skip unreadable images politely via collate
     )
     loader = DataLoader(

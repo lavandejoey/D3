@@ -2,7 +2,7 @@
 #SBATCH --job-name=D3Eval
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.err
-#SBATCH --partition=A40,L40S,A100
+#SBATCH --partition=A40,L40S
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
@@ -31,6 +31,7 @@ mkdir -p "${result_dir}"
 #data_root="/home/infres/ziyliu-24/data/FakeParts2DataMock"
 data_root="/projects/hi-paris/DeepFakeDataset/FakeParts_data_addition_frames_only"
 data_entry_csv="/projects/hi-paris/DeepFakeDataset/frames_index.csv"
+done_csv_list=("results")
 
 source /home/infres/ziyliu-24/miniconda3/etc/profile.d/conda.sh
 conda activate fakevlm310
@@ -39,7 +40,8 @@ srun python3 -Wignore D3Eval.py \
 --data_root "${data_root}" \
 --results "${result_dir}" \
 --ckpt "ckpt/classifier.pth" \
-    --data_csv ${data_entry_csv}
+--data_csv ${data_entry_csv} \
+--done_csv_list "${done_csv_list[@]}"
 
 EXIT_CODE=$?
 
