@@ -25,7 +25,7 @@ echo "Start:  $(date)"
 echo "==================================================="
 
 datetime="$(date '+%Y%m%d_%H%M%S')"
-result_dir="results/${datetime}_DeFake_ViTB32"
+result_dir="results/${datetime}_D3_ViT-L14"
 mkdir -p "${result_dir}"
 #data_root="/home/infres/ziyliu-24/data/FakeParts2DataMockBin"
 #data_root="/home/infres/ziyliu-24/data/FakeParts2DataMock"
