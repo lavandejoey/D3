@@ -147,14 +147,14 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     out_csv = out_dir / "predictions.csv"
 
-    # 1) Index
-    log.info("Indexing under %s (csv=%s)", args.data_root, args.data_csv or "None")
-    df_idx = index_dataframe(Path(args.data_root), file_exts=IMG_EXTS, csv_path=args.data_csv)
-    if len(df_idx) == 0:
-        raise SystemExit(f"No images under {args.data_root} with {IMG_EXTS}.")
-    log.info("Indexed %d files; mode counts: %s",
-             len(df_idx),
-             dict(df_idx["mode"].value_counts().items()))  # uses DataUtils index  :contentReference[oaicite:6]{index=6}
+    # # 1) Index
+    # log.info("Indexing under %s (csv=%s)", args.data_root, args.data_csv or "None")
+    # df_idx = index_dataframe(Path(args.data_root), file_exts=IMG_EXTS, csv_path=args.data_csv)
+    # if len(df_idx) == 0:
+    #     raise SystemExit(f"No images under {args.data_root} with {IMG_EXTS}.")
+    # log.info("Indexed %d files; mode counts: %s",
+    #          len(df_idx),
+    #          dict(df_idx["mode"].value_counts().items()))  # uses DataUtils index  :contentReference[oaicite:6]{index=6}
 
     # 2) Dataset/Loader
     transform = build_transform(args.arch, args.image_size, do_norm=True)

@@ -115,6 +115,7 @@ class FakePartsV2DatasetBase(Dataset):
 
         # Build/ingest index once
         df = index_dataframe(self.data_root, file_exts=self.exts, csv_path=csv_path)
+        log.info(f"Indexed {len(df)} entries under {data_root} with extensions {self.exts}.")
 
         # Remove done files if provided
         # safe use csv -> df
